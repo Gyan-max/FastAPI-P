@@ -1,10 +1,15 @@
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, computed_field
 from typing import Annotated, Literal
 import json
+import os
+import base64
 
 app = FastAPI()
+
+# UPLOAD_DIR = "uploaded_images"
+# os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class Patient(BaseModel):
     id: Annotated[str, Field(..., description='Enter ID of the patient', examples = ['P001'])]
@@ -24,7 +29,7 @@ class Patient(BaseModel):
     sugar: Annotated[float, Field(..., gt=0, description='Enter sugar level of the patient in mg/dL')]
     temperature: Annotated[float, Field(..., gt=0, description='Enter temperature of the patient in Celsius')]
     reason: Annotated[str, Field(..., description='Enter reason for visit of the patient')]
-
+    image_url: Annotated[str, Field(default=None, description='Enter URL of the patient image')]
 
     # @computed_field
     # @property
@@ -62,6 +67,7 @@ class update_Patient_Details(BaseModel):
     sugar: Annotated[float | None, Field(default=None, gt=0, description='Enter sugar level of the patient in mg/dL')]
     temperature: Annotated[float | None, Field(default=None, gt=0, description='Enter temperature of the patient in Celsius')]
     reason: Annotated[str | None, Field(default=None, description='Enter reason for visit of the patient')]
+    image_url: Annotated[str | None, Field(default=None, description='Enter URL of the patient image')]
 
     @computed_field
     @property
@@ -112,7 +118,8 @@ def about():
 
 @app.get('/view')
 def view():
-    return patient_details()
+    data = patient_details()
+    return data
 
 @app.get('/patients/{patient_id}')
 def get_patient_details(patient_id: str = Path(..., description='Enter ID of the patient')):
@@ -128,7 +135,6 @@ def create_patient(patient: Patient):
     if patient.id in data:
         raise HTTPException(status_code=400, detail = 'Patient already exists in the database')
     data[patient.id] = patient.model_dump(exclude=['id'])
-
     save_data(data)
     return JSONResponse(status_code=201, content={'message': 'Patient created successfully'})
 
@@ -136,6 +142,7 @@ def create_patient(patient: Patient):
 def update_patient(patient_id: str, patient: update_Patient_Details):
     data = patient_details()
     if patient_id in data:
+        # Update patient details
         if patient.name is not None:
             data[patient_id]['name'] = patient.name
         if patient.father_name is not None:
@@ -162,10 +169,11 @@ def update_patient(patient_id: str, patient: update_Patient_Details):
             data[patient_id]['temperature'] = patient.temperature
         if patient.reason is not None:
             data[patient_id]['reason'] = patient.reason
+
         save_data(data)
         return JSONResponse(status_code=200, content={'message': 'Patient updated successfully'})
     else:
-        raise HTTPException(status_code=404, detail = 'Patient not found in the database')
+        raise HTTPException(status_code=404, detail='Patient not found in the database')
 
 @app.delete('/delete/{patient_id}')
 def delete_patient(patient_id: str):
